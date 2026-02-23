@@ -112,7 +112,7 @@ jobs:
     name: "${{ needs.systems-config.outputs.system_name }} Pipeline"
     needs: [detect-changes, systems-config]
     if: needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs.shared == 'true'
-    uses: OWNER/Central-Template-main/.github/workflows/backend-workflow.yml@main
+    uses: ImplementSprint/Central-Template/.github/workflows/backend-workflow.yml@main
     with:
       system-dir: ${{ needs.systems-config.outputs.working_dir }}
       system-name: ${{ needs.systems-config.outputs.system_name }}
@@ -130,7 +130,7 @@ jobs:
     if: >-
       always() &&
       (needs.backend.result == 'success' || needs.backend.result == 'skipped')
-    uses: OWNER/Central-Template/.github/workflows/sonarcloud-scan.yml@main
+    uses: ImplementSprint/Central-Template/.github/workflows/sonarcloud-scan.yml@main
     with:
       working-directory: ${{ needs.systems-config.outputs.working_dir }}
       system-name: ${{ needs.systems-config.outputs.system_name }}
