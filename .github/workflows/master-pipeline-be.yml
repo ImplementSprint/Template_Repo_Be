@@ -112,7 +112,7 @@ jobs:
     name: "${{ needs.systems-config.outputs.system_name }} Pipeline"
     needs: [detect-changes, systems-config]
     if: needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs.shared == 'true'
-    uses: OWNER/Central-Template-main/.github/workflows/backend-workflow.yml@main
+    uses: ImplementSprint/Central-Template/.github/workflows/backend-workflow.yml@main
     with:
       system-dir: ${{ needs.systems-config.outputs.working_dir }}
       system-name: ${{ needs.systems-config.outputs.system_name }}
@@ -130,7 +130,7 @@ jobs:
     if: >-
       always() &&
       (needs.backend.result == 'success' || needs.backend.result == 'skipped')
-    uses: OWNER/Central-Template-main/.github/workflows/sonarcloud-scan.yml@main
+    uses: ImplementSprint/Central-Template/.github/workflows/sonarcloud-scan.yml@main
     with:
       working-directory: ${{ needs.systems-config.outputs.working_dir }}
       system-name: ${{ needs.systems-config.outputs.system_name }}
@@ -140,7 +140,7 @@ jobs:
       coverage-artifact-name: ${{ needs.systems-config.outputs.system_name }}-coverage
       quality-gate-wait: true
     secrets:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} 
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
       SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
 
@@ -155,7 +155,7 @@ jobs:
       github.ref == 'refs/heads/test' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true') &&
       (needs.backend.result == 'success' || needs.backend.result == 'skipped')
-    uses: OWNER/Central-Template-main/.github/workflows/versioning.yml@main
+    uses: ImplementSprint/Central-Template/.github/workflows/versioning.yml@main
     with:
       mode: test
 
@@ -170,55 +170,14 @@ jobs:
       github.ref == 'refs/heads/test' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (github.event_name != 'workflow_dispatch' || (github.event.inputs.run_deploy == 'true' && github.event.inputs.dry_run != 'true')) &&
       (needs.backend.result == 'success' || needs.backend.result == 'skipped')
-    runs-on: ubuntu-latest
-    outputs:
-      deployment_url: ${{ steps.deploy.outputs.deployment_url }}
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Deploy to Replit (TEST)
-        id: deploy
-        env:
-          REPLIT_DEPLOY_URL: ${{ secrets[needs.systems-config.outputs.replit_deploy_secret] }}
-          REPLIT_API_KEY: ${{ secrets.REPLIT_API_KEY }}
-        run: |
-          echo "╔══════════════════════════════════════════════╗"
-          echo "║   REPLIT DEPLOYMENT — TEST                   ║"
-          echo "╠══════════════════════════════════════════════╣"
-          echo "║ System:      ${{ needs.systems-config.outputs.system_name }}"
-          echo "║ Environment: test"
-          echo "║ Branch:      ${{ github.ref_name }}"
-          echo "║ Commit:      ${{ github.sha }}"
-          echo "║ Timestamp:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "╚══════════════════════════════════════════════╝"
-
-          if [ -z "${REPLIT_DEPLOY_URL}" ]; then
-            echo "⚠️ REPLIT_DEPLOY_URL secret not set. Skipping Replit deploy."
-            echo "deployment_url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # Trigger Replit deployment via deploy hook
-          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST "${REPLIT_DEPLOY_URL}" \
-            -H "Content-Type: application/json" \
-            -d "{\"branch\":\"test\",\"commit\":\"${{ github.sha }}\"}" 2>&1 || true)
-
-          HTTP_CODE=$(echo "${RESPONSE}" | tail -n 1)
-          BODY=$(echo "${RESPONSE}" | sed '$d')
-
-          if [ "${HTTP_CODE}" = "200" ] || [ "${HTTP_CODE}" = "201" ] || [ "${HTTP_CODE}" = "204" ]; then
-            echo "✅ Replit deploy triggered successfully"
-            DEPLOY_URL=$(echo "${BODY}" | jq -r '.url // empty' 2>/dev/null || true)
-            if [ -z "${DEPLOY_URL}" ]; then
-              DEPLOY_URL="${REPLIT_DEPLOY_URL}"
-            fi
-          else
-            echo "⚠️ Replit deploy returned HTTP ${HTTP_CODE}"
-            DEPLOY_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          fi
-
-          echo "deployment_url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
+    uses: ImplementSprint/Central-Template/.github/workflows/replit-deploy.yml@main
+    with:
+      system-name: ${{ needs.systems-config.outputs.system_name }}
+      environment: test
+      branch: test
+    secrets:
+      REPLIT_DEPLOY_URL: ${{ secrets[needs.systems-config.outputs.replit_deploy_secret] }}
+      REPLIT_API_KEY: ${{ secrets.REPLIT_API_KEY }}
 
   # ══════════════════════════════════════════════════════════════════
   # Deploy UAT (Replit)
@@ -231,54 +190,14 @@ jobs:
       github.ref == 'refs/heads/uat' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (github.event_name != 'workflow_dispatch' || (github.event.inputs.run_deploy == 'true' && github.event.inputs.dry_run != 'true')) &&
       (needs.backend.result == 'success' || needs.backend.result == 'skipped')
-    runs-on: ubuntu-latest
-    outputs:
-      deployment_url: ${{ steps.deploy.outputs.deployment_url }}
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Deploy to Replit (UAT)
-        id: deploy
-        env:
-          REPLIT_DEPLOY_URL: ${{ secrets[needs.systems-config.outputs.replit_deploy_secret] }}
-          REPLIT_API_KEY: ${{ secrets.REPLIT_API_KEY }}
-        run: |
-          echo "╔══════════════════════════════════════════════╗"
-          echo "║   REPLIT DEPLOYMENT — UAT                    ║"
-          echo "╠══════════════════════════════════════════════╣"
-          echo "║ System:      ${{ needs.systems-config.outputs.system_name }}"
-          echo "║ Environment: uat"
-          echo "║ Branch:      ${{ github.ref_name }}"
-          echo "║ Commit:      ${{ github.sha }}"
-          echo "║ Timestamp:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "╚══════════════════════════════════════════════╝"
-
-          if [ -z "${REPLIT_DEPLOY_URL}" ]; then
-            echo "⚠️ REPLIT_DEPLOY_URL secret not set. Skipping Replit deploy."
-            echo "deployment_url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST "${REPLIT_DEPLOY_URL}" \
-            -H "Content-Type: application/json" \
-            -d "{\"branch\":\"uat\",\"commit\":\"${{ github.sha }}\"}" 2>&1 || true)
-
-          HTTP_CODE=$(echo "${RESPONSE}" | tail -n 1)
-          BODY=$(echo "${RESPONSE}" | sed '$d')
-
-          if [ "${HTTP_CODE}" = "200" ] || [ "${HTTP_CODE}" = "201" ] || [ "${HTTP_CODE}" = "204" ]; then
-            echo "✅ Replit deploy triggered successfully"
-            DEPLOY_URL=$(echo "${BODY}" | jq -r '.url // empty' 2>/dev/null || true)
-            if [ -z "${DEPLOY_URL}" ]; then
-              DEPLOY_URL="${REPLIT_DEPLOY_URL}"
-            fi
-          else
-            echo "⚠️ Replit deploy returned HTTP ${HTTP_CODE}"
-            DEPLOY_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          fi
-
-          echo "deployment_url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
+    uses: ImplementSprint/Central-Template/.github/workflows/replit-deploy.yml@main
+    with:
+      system-name: ${{ needs.systems-config.outputs.system_name }}
+      environment: uat
+      branch: uat
+    secrets:
+      REPLIT_DEPLOY_URL: ${{ secrets[needs.systems-config.outputs.replit_deploy_secret] }}
+      REPLIT_API_KEY: ${{ secrets.REPLIT_API_KEY }}
 
   # ══════════════════════════════════════════════════════════════════
   # Production Readiness Gate
@@ -291,7 +210,7 @@ jobs:
       github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (github.event_name != 'workflow_dispatch' || (github.event.inputs.run_deploy == 'true' && github.event.inputs.dry_run != 'true')) &&
       (needs.backend.result == 'success' || needs.backend.result == 'skipped')
-    uses: OWNER/Central-Template-main/.github/workflows/production-gate.yml@main
+    uses: ImplementSprint/Central-Template/.github/workflows/production-gate.yml@main
     with:
       system-dir: ${{ needs.systems-config.outputs.working_dir }}
       app-type: api
@@ -304,54 +223,14 @@ jobs:
     name: "Prod — ${{ needs.systems-config.outputs.system_name }}"
     needs: [production-gate, systems-config]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_deploy == 'true' && github.event.inputs.dry_run != 'true'))
-    runs-on: ubuntu-latest
-    outputs:
-      deployment_url: ${{ steps.deploy.outputs.deployment_url }}
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Deploy to Replit (PRODUCTION)
-        id: deploy
-        env:
-          REPLIT_DEPLOY_URL: ${{ secrets[needs.systems-config.outputs.replit_deploy_secret] }}
-          REPLIT_API_KEY: ${{ secrets.REPLIT_API_KEY }}
-        run: |
-          echo "╔══════════════════════════════════════════════╗"
-          echo "║   REPLIT DEPLOYMENT — PRODUCTION             ║"
-          echo "╠══════════════════════════════════════════════╣"
-          echo "║ System:      ${{ needs.systems-config.outputs.system_name }}"
-          echo "║ Environment: production"
-          echo "║ Branch:      ${{ github.ref_name }}"
-          echo "║ Commit:      ${{ github.sha }}"
-          echo "║ Timestamp:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "╚══════════════════════════════════════════════╝"
-
-          if [ -z "${REPLIT_DEPLOY_URL}" ]; then
-            echo "⚠️ REPLIT_DEPLOY_URL secret not set. Skipping Replit deploy."
-            echo "deployment_url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST "${REPLIT_DEPLOY_URL}" \
-            -H "Content-Type: application/json" \
-            -d "{\"branch\":\"main\",\"commit\":\"${{ github.sha }}\",\"environment\":\"production\"}" 2>&1 || true)
-
-          HTTP_CODE=$(echo "${RESPONSE}" | tail -n 1)
-          BODY=$(echo "${RESPONSE}" | sed '$d')
-
-          if [ "${HTTP_CODE}" = "200" ] || [ "${HTTP_CODE}" = "201" ] || [ "${HTTP_CODE}" = "204" ]; then
-            echo "✅ Replit production deploy triggered successfully"
-            DEPLOY_URL=$(echo "${BODY}" | jq -r '.url // empty' 2>/dev/null || true)
-            if [ -z "${DEPLOY_URL}" ]; then
-              DEPLOY_URL="${REPLIT_DEPLOY_URL}"
-            fi
-          else
-            echo "⚠️ Replit deploy returned HTTP ${HTTP_CODE}"
-            DEPLOY_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          fi
-
-          echo "deployment_url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
+    uses: ImplementSprint/Central-Template/.github/workflows/replit-deploy.yml@main
+    with:
+      system-name: ${{ needs.systems-config.outputs.system_name }}
+      environment: production
+      branch: main
+    secrets:
+      REPLIT_DEPLOY_URL: ${{ secrets[needs.systems-config.outputs.replit_deploy_secret] }}
+      REPLIT_API_KEY: ${{ secrets.REPLIT_API_KEY }}
 
   # ══════════════════════════════════════════════════════════════════
   # Update Repository About Link
@@ -405,7 +284,7 @@ jobs:
       github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true') &&
       (needs.deploy-prod.result == 'success' || needs.deploy-prod.result == 'skipped')
-    uses: OWNER/Central-Template-main/.github/workflows/versioning.yml@main
+    uses: ImplementSprint/Central-Template/.github/workflows/versioning.yml@main
     with:
       mode: main
 
@@ -416,7 +295,7 @@ jobs:
     name: "GHCR — ${{ needs.systems-config.outputs.system_name }}"
     needs: [version-main-release, systems-config]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_deploy == 'true' && github.event.inputs.dry_run != 'true'))
-    uses: OWNER/Central-Template-main/.github/workflows/docker-build.yml@main
+    uses: ImplementSprint/Central-Template/.github/workflows/docker-build.yml@main
     with:
       working-directory: ${{ needs.systems-config.outputs.working_dir }}
       image-name: ${{ needs.systems-config.outputs.image_name }}
@@ -438,7 +317,7 @@ jobs:
       (needs.backend.result == 'success' || needs.backend.result == 'skipped') &&
       needs.version-test.result == 'success' &&
       (needs.deploy-test.result == 'success' || needs.deploy-test.result == 'skipped')
-    uses: OWNER/Central-Template-main/.github/workflows/promotion.yml@main
+    uses: ImplementSprint/Central-Template/.github/workflows/promotion.yml@main
     with:
       pipeline-kind: single
       direction: test-to-uat
@@ -467,7 +346,7 @@ jobs:
       (github.event_name != 'workflow_dispatch' || github.event.inputs.run_promotion == 'true') &&
       (needs.backend.result == 'success' || needs.backend.result == 'skipped') &&
       (needs.deploy-uat.result == 'success' || needs.deploy-uat.result == 'skipped')
-    uses: OWNER/Central-Template-main/.github/workflows/promotion.yml@main
+    uses: ImplementSprint/Central-Template/.github/workflows/promotion.yml@main
     with:
       pipeline-kind: single
       direction: uat-to-main
@@ -490,85 +369,85 @@ jobs:
     name: "Pipeline Summary"
     needs: [backend, systems-config]
     if: always()
-    uses: OWNER/Central-Template-main/.github/workflows/pipeline-summary.yml@main
+    uses: ImplementSprint/Central-Template/.github/workflows/pipeline-summary.yml@main
     with:
       pipeline-kind: single
       system1-name: ${{ needs.systems-config.outputs.system_name }}
       system1-result: ${{ needs.backend.result }}
 
   # ══════════════════════════════════════════════════════════════════
-  # Auto Revert on Failure
+  # Auto Revert on Failure (DISABLED)
   # ══════════════════════════════════════════════════════════════════
-  auto-revert-on-failure:
-    name: "Auto Revert on Failure"
-    needs:
-      [
-        systems-config,
-        backend,
-        sonarcloud,
-        version-test,
-        deploy-test,
-        deploy-uat,
-        production-gate,
-        deploy-prod,
-        update-about-link,
-        version-main-release,
-        docker-main,
-        create-pr-to-uat,
-        create-pr-to-main,
-        pipeline-summary,
-      ]
-    if: >-
-      always() &&
-      github.event_name == 'push' &&
-      contains(needs.*.result, 'failure') &&
-      !contains(github.event.head_commit.message, '[skip-revert]') &&
-      !contains(github.event.head_commit.message, '[skip ci]') &&
-      !contains(github.event.head_commit.message, '[ci skip]') &&
-      !startsWith(github.event.head_commit.message, 'Revert "')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ github.token }}
-
-      - name: Create rollback commit
-        env:
-          BRANCH_NAME: ${{ github.ref_name }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git fetch origin "${BRANCH_NAME}" --depth=50
-          git checkout -B "${BRANCH_NAME}" "origin/${BRANCH_NAME}"
-
-          export GIT_EDITOR=:
-
-          if git revert --no-edit "${GITHUB_SHA}"; then
-            git commit --amend -m "$(git log -1 --pretty=%B) [skip ci] [skip-revert]"
-            echo "✅ Created revert commit from ${GITHUB_SHA}."
-          elif git revert -m 1 --no-edit "${GITHUB_SHA}"; then
-            git commit --amend -m "$(git log -1 --pretty=%B) [skip ci] [skip-revert]"
-            echo "✅ Created merge-revert commit from ${GITHUB_SHA}."
-          else
-            git revert --abort || true
-            SHORT_SHA="${GITHUB_SHA:0:7}"
-            git commit --allow-empty -m "ci(auto-revert): manual rollback required for ${SHORT_SHA} [skip ci] [skip-revert]"
-            echo "⚠️ Automatic revert conflicted; created marker commit for manual rollback."
-          fi
-
-          git push origin "HEAD:${BRANCH_NAME}"
+  # auto-revert-on-failure:
+  #   name: "Auto Revert on Failure"
+  #   needs:
+  #     [
+  #       systems-config,
+  #       backend,
+  #       sonarcloud,
+  #       version-test,
+  #       deploy-test,
+  #       deploy-uat,
+  #       production-gate,
+  #       deploy-prod,
+  #       update-about-link,
+  #       version-main-release,
+  #       docker-main,
+  #       create-pr-to-uat,
+  #       create-pr-to-main,
+  #       pipeline-summary,
+  #     ]
+  #   if: >-
+  #     always() &&
+  #     github.event_name == 'push' &&
+  #     contains(needs.*.result, 'failure') &&
+  #     !contains(github.event.head_commit.message, '[skip-revert]') &&
+  #     !contains(github.event.head_commit.message, '[skip ci]') &&
+  #     !contains(github.event.head_commit.message, '[ci skip]') &&
+  #     !startsWith(github.event.head_commit.message, 'Revert "')
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout Code
+  #       uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
+  #         token: ${{ github.token }}
+  #
+  #     - name: Create rollback commit
+  #       env:
+  #         BRANCH_NAME: ${{ github.ref_name }}
+  #       run: |
+  #         git config user.name "github-actions[bot]"
+  #         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+  #
+  #         git fetch origin "${BRANCH_NAME}" --depth=50
+  #         git checkout -B "${BRANCH_NAME}" "origin/${BRANCH_NAME}"
+  #
+  #         export GIT_EDITOR=:
+  #
+  #         if git revert --no-edit "${GITHUB_SHA}"; then
+  #           git commit --amend -m "$(git log -1 --pretty=%B) [skip ci] [skip-revert]"
+  #           echo "✅ Created revert commit from ${GITHUB_SHA}."
+  #         elif git revert -m 1 --no-edit "${GITHUB_SHA}"; then
+  #           git commit --amend -m "$(git log -1 --pretty=%B) [skip ci] [skip-revert]"
+  #           echo "✅ Created merge-revert commit from ${GITHUB_SHA}."
+  #         else
+  #           git revert --abort || true
+  #           SHORT_SHA="${GITHUB_SHA:0:7}"
+  #           git commit --allow-empty -m "ci(auto-revert): manual rollback required for ${SHORT_SHA} [skip ci] [skip-revert]"
+  #           echo "⚠️ Automatic revert conflicted; created marker commit for manual rollback."
+  #         fi
+  #
+  #         git push origin "HEAD:${BRANCH_NAME}"
 
   # ══════════════════════════════════════════════════════════════════
   # Notify Pipeline Status
   # ══════════════════════════════════════════════════════════════════
   notify-pipeline:
     name: "Notify Pipeline Status"
-    needs: [pipeline-summary, backend, sonarcloud, systems-config, deploy-test, deploy-uat, deploy-prod, auto-revert-on-failure]
+    needs: [pipeline-summary, backend, sonarcloud, systems-config, deploy-test, deploy-uat, deploy-prod]
     if: always()
-    uses: OWNER/Central-Template-main/.github/workflows/notifications.yml@main
+    uses: ImplementSprint/Central-Template/.github/workflows/notifications.yml@main
     with:
       status: ${{ (needs.backend.result == 'success' || needs.backend.result == 'skipped') && 'success' || (needs.backend.result == 'cancelled' && 'cancelled' || 'failure') }}
       system-dir: Backend
